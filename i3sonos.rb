@@ -1,4 +1,4 @@
-#!/usr/local/bin/ruby22
+#!/usr/bin/env ruby
 
 STDOUT.sync = true
 
