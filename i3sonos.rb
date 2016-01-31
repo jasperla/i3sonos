@@ -30,7 +30,6 @@ puts $stdin.gets
 s_name = ARGV[0]
 # If no speaker name was passed as argument, see if ~/.i3sonos.conf has it
 if s_name.nil? || s_name.empty?
-  # read name from the file (plaintext format)
   config_file = File.read(File.expand_path("~/.i3sonos.conf"))
   config = JSON.parse(config_file)
   if config['enabled'] != true
