@@ -21,6 +21,29 @@ def do_nothing
   end
 end
 
+def enabled?(config)
+  config['enabled'] == true || !config['speaker'].nil?
+end
+
+def read_config
+  config_file = File.read(File.expand_path("~/.i3sonos.conf"))
+  JSON.parse(config_file)
+end
+
+def speaker_name(config)
+  config['speaker']
+end
+
+def select_speaker(system, name)
+  speaker = system.speakers.select { |s| s.name.downcase == name.downcase }
+
+  if speaker.size < 0
+    nil
+  else
+    speaker[0]
+  end
+end
+
 # print the version
 puts $stdin.gets
 
@@ -30,32 +53,20 @@ puts $stdin.gets
 s_name = ARGV[0]
 # If no speaker name was passed as argument, see if ~/.i3sonos.conf has it
 if s_name.nil? || s_name.empty?
-  config_file = File.read(File.expand_path("~/.i3sonos.conf"))
-  config = JSON.parse(config_file)
-  if config['enabled'] != true
-    do_nothing
-  end
-
-  unless config['speaker'].nil?
-    s_name = config['speaker']
-  else
-    do_nothing
-  end
+  config = read_config
+  do_nothing unless enabled?(config)
+  s_name = speaker_name(config)
 end
 
 system = silence_stdout { Sonos::System.new }
-speaker = system.speakers.select { |s| s.name.downcase == s_name.downcase }
+speaker = select_speaker(system, s_name)
 
-# If no matching speakers found, just return.
-if speaker.size < 0
-  puts "${$stdin.gets},"
-  return
-else
-  speaker = speaker[0]
-end
+# If no matching speakers found, nothing to do
+do_nothing if speaker.nil?
+
+t = Time.now.to_i
 
 loop do
-  t = Time.now.to_i
   i3status_line = $stdin.gets
   i3status_line.sub!(/^,?/, "")
   i3_json = JSON.parse(i3status_line)
@@ -63,9 +74,12 @@ loop do
   # If more than 60 seconds have passed, do a new system discovery.
   # Or if we don't have a proper system to work with, in that case
   # try a rediscovery much sooner.
-  if (Time.now.to_i - t >= 60) ||
-     (system.devices.empty? && Time.now.to_i - 1 >= 10)
+  # Also re-read our config in case the speaker has changed.
+  if ((Time.now.to_i - t) >= 10) || (system.devices.empty? &&
+                                   Time.now.to_i - 1 >= 10)
     system = silence_stdout { Sonos::System.new }
+    config = read_config
+    speaker = select_speaker(system, speaker_name(config))
 
     # Update our t
     t = Time.now.to_i
